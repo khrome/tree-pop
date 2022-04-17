@@ -64,7 +64,7 @@ const expandable = (type, fieldName, fieldValue) => {
     }
     return false;
 };
-const lookup = (type, idList, cb) => {
+const lookup = (type, context, cb) => {
     if(!directory[type]) return cb(new Error('Type not Found!'));
     if(Array.isArray(context)){
         const idList = context;
