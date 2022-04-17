@@ -1,0 +1,12 @@
+{
+  "name": "tree-pop",
+  "version": "0.0.1",
+  "main": "tree-pop.js",
+  "devDependencies": {
+    "chai": "^4.3.6",
+    "mocha": "^9.2.2"
+  },
+  "dependencies": {
+    "async-arrays": "^1.0.1"
+  }
+}
