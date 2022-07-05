@@ -7,6 +7,16 @@ const capitalize = (s)=>{
     }).join('');
 };
 
+const join = (...parts)=>{
+    let value = '';
+    parts.forEach((part, index)=>{
+        if(index){
+            value += capitalize(part);
+        } else value += part;
+    });
+    return value;
+};
+
 const Pop = function(opts){
     this.options = opts || {};
 }
@@ -62,10 +72,16 @@ Pop.prototype.doAttachment = function(type, action, context, cb){
             criteria[internalLink] = context[this.options.identifier];
             this.options.lookup(action.target, criteria, (err, results)=>{
                 const externalCriteria = {};
-                const externalLink = action[external]+capitalize(this.options.identifier);
-                externalCriteria[this.options.identifier] = {'$in': results.map(i => i[externalLink])};
+                const externalLink = ( 
+                    this.options.join || join
+                )(action[external], this.options.identifier);
+                externalCriteria[this.options.identifier] = {'$in': results.map((i) =>{
+                    return i[externalLink];
+                })};
                 this.options.lookup(action[external], externalCriteria, (err, results)=>{
-                    const listName = action[external]+capitalize(this.options.listSuffix);
+                    const listName = ( 
+                        this.options.join || join
+                    )(action[external], this.options.listSuffix);
                     accessor.set(context, listName, results);
                     cb();
                 });
