@@ -71,5 +71,67 @@ describe('tree-pop', ()=>{
                 done();
             });
         });
+        
+        it('builds a tree, then deconstructs it', (done)=>{
+            const populate = new Pop({
+                identifier,
+                linkSuffix,
+                expandable,
+                listSuffix,
+                lookup,
+                otherLinks
+            });
+            populate.tree('user', directory.user[0], [
+                'sessionId',
+                '<post',
+                'userAddressLink:user:address'
+            ], (err, user)=>{
+                user.addressList.push({ //add a new address
+                    street1: '123 Main St.',
+                    city: 'Nowhere',
+                    state: 'GA',
+                    postalcode: '73038'
+                });
+                populate.deconstruct('user', user, [
+                    'sessionId',
+                    '<post',
+                    'userAddressLink:user:address'
+                ], (err, objects)=>{
+                    
+                    //make sure the objects coming out match their counterparts
+                    Object.keys(directory).forEach((typeName)=>{
+                        if(typeName !== 'userAddressLink'){ //don't rewrite existing links
+                            directory[typeName].forEach((ob, index)=>{
+                                if(objects[typeName][index]){
+                                    objects[typeName][index].should.deep.equal(ob);
+                                }
+                            });
+                        }
+                    });
+                    
+                    //do the symbolic references resolve correctly, for the new address?
+                    let addressIdType = typeof objects.address[2].id;
+                    (addressIdType).should.equal('function');
+                    (objects.address[2].id() === null).should.equal(true);
+                    let linkIdType = typeof objects.userAddressLink[0].addressId;
+                    (linkIdType).should.equal('function');
+                    (objects.userAddressLink[0].addressId() === null).should.equal(true);
+                    let idValue = 42;
+                    (objects.address[2].id(idValue) === idValue).should.equal(true);
+                    (objects.userAddressLink[0].addressId() === idValue).should.equal(true);
+                    
+                    //are the batches ordered according to precedence/order?
+                    populate.orderBatches(objects).should.deep.equal([ 
+                        'session',
+                        'post',
+                        'user',
+                        'address',
+                        'userAddressLink'
+                    ]);
+                    
+                    done();
+                });
+            });
+        });
     });
 });

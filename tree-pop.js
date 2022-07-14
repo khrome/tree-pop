@@ -100,6 +100,74 @@ Pop.prototype.doAttachment = function(type, action, context, cb){
     }
 };
 
+Pop.prototype.detach = function(type, action, context, cb){
+    const internalLink = type+capitalize(this.options.identifier);
+    let value = null;
+    let results = {};
+    let listName;
+    switch(action.mode.toLowerCase()){
+        case 'internal': // N : 1
+            value = accessor.get(context, action.target);
+            accessor.set(context, action.target, undefined, true);
+            if(!results[action.target]) results[action.target] = [];
+            results[action.target] = results[action.target].concat([value]);
+            break;
+        case 'linked': // N : N
+            const internal = action.from === type?'from':'to';
+            if(action[internal] !== type) throw new Error('expected an object to link to: '+type);
+            const external = action.from === type?'to':'from';
+            const criteria = {};
+            criteria[internalLink] = context[this.options.identifier];
+            listName = ( 
+                this.options.join || join
+            )(action[external], this.options.listSuffix);
+            value = accessor.get(context, listName);
+            accessor.set(context, listName, undefined, true);
+            if(!results[action.target]) results[action.target] = [];
+            if(!results[action[external]]) results[action[external]] = [];
+            results[action[external]] = results[action[external]].concat(value);
+            let thisLink = ( 
+                this.options.join || join
+            )(action[internal], 'id');
+            let thatLink = ( 
+                this.options.join || join
+            )(action[external], 'id');
+            
+            results[action.target] = value.reduce((agg, item)=>{
+                //allow linkage?
+                if(!item.id){
+                    let ob = {};
+                    let reference = '**'+Math.floor(Math.random()*999999999)+'**';
+                    let value =  null;
+                    item.id = function(v){
+                        if(v) value = v;
+                        return value;
+                    };
+                    item.id.pointsTo = () => action[external];
+                    item.id.toJSON = ()=>{ return item.id() };
+                    ob[thisLink] = ()=> context.id;
+                    ob[thisLink].pointsTo = () => action[internal];
+                    item.id.toJSON = ()=>{ return ob[thisLink]() };
+                    ob[thatLink] = item.id;
+                    agg.push(ob);
+                }
+                return agg;
+            }, []);
+            break;
+        case 'external': // 1 : N
+            const externalCriteria = {};
+            externalCriteria[internalLink] = context[this.options.identifier];
+            listName = action.target+capitalize(this.options.listSuffix);
+            value = accessor.get(context, listName);
+            accessor.set(context, listName, undefined, true);
+            if(!results[action.target]) results[action.target] = [];
+            results[action.target] = results[action.target].concat(value);
+            break;
+        default: throw new Error('Unrecognized attachment mode: '+action.mode);
+    }
+    cb(null, results)
+};
+
 Pop.prototype.parseBatch = function(type, batch){
     const options = {
         raw: batch,
@@ -124,7 +192,7 @@ Pop.prototype.parseBatch = function(type, batch){
     return options;
 };
 
-Pop.prototype.batches = function(type, ob, batches, cb){
+/*Pop.prototype.batches = function(type, ob, batches, cb){
     //TODO: abstract away the batch syntax
     arrays.forEachEmission(batches, (batch, index, done)=>{
         if(!batch) return cb(new Error('empty batch!'));
@@ -132,6 +200,28 @@ Pop.prototype.batches = function(type, ob, batches, cb){
         this.doAttachment(type, options, ob, ()=>{
             done();
         });
+    }, ()=>{
+        cb(null, ob);
+    })
+};*/
+
+Pop.prototype.batches = function(type, ob, batches, cb){
+    return this.byBatch(type, ob, batches, (options, done)=>{
+        this.doAttachment(type, options, ob, ()=>{
+            done();
+        });
+    }, cb);
+};
+
+Pop.prototype.byBatch = function(type, ob, batches, action, cb){
+    //TODO: abstract away the batch syntax
+    arrays.forEachEmission(batches, (batch, index, done)=>{
+        if(!batch) return cb(new Error('empty batch!'));
+        const options = this.parseBatch(type, batch);
+        action(options, done);
+        /*this.doAttachment(type, options, ob, ()=>{
+            done();
+        });*/
     }, ()=>{
         cb(null, ob);
     })
@@ -151,6 +241,72 @@ Pop.prototype.tree = function(type, o, att, cb){
         return this.batches(type, ob, attachments, callback);
     }
     return callback(new Error('No supported mode.'))
+};
+
+Pop.prototype.deconstruct = function(type, o, att, cb){
+    const ob = JSON.parse(JSON.stringify(o));
+    const callback = typeof att === 'function' && !cb?att:cb;
+    const attachments = typeof att === 'function' && !cb?[]:att;
+    if(this.options.recursive && ((!attachments) || (!attachments.length))){
+        return this.node(type, [ob], this.options.recursive, (err, obs)=>{
+            callback(err, obs?obs[0]:null);
+        });
+    }
+    if(attachments.length){
+        //do batched
+        let resres = [];
+        return this.byBatch(type, ob, attachments, (options, done)=>{
+            this.detach(type, options, ob, (err, results)=>{
+                resres.push(results);
+                done();
+            });
+        }, (err, res)=>{
+            let finres = resres.reduce((agg, item)=>{
+                Object.keys(item).forEach((key)=>{
+                    if(agg[key]) agg[key] = agg[key].concat(item[key]);
+                    else agg[key] = item[key];
+                });
+                return agg;
+            }, {});
+            let trg = JSON.parse(JSON.stringify(res))
+            if(finres[type]) finres[type] = finres[type].concat([trg]);
+            else finres[type] = [trg];
+            cb(err, finres);
+        });
+    }
+    return callback(new Error('No supported mode.'))
+};
+
+Pop.prototype.orderBatches = function(batches){
+    let results = [];
+    let getDependencies = (batch)=>{
+        let deps = [];
+        Object.keys(batch).forEach((typeName)=>{
+            const typeIndex = deps.indexOf(typeName);
+            if(typeIndex === -1){
+                batch[typeName].forEach((ob, index)=>{
+                    Object.keys(ob).forEach((fieldName)=>{
+                        if(typeof ob[fieldName] === 'function'){
+                            let dep = ob[fieldName].pointsTo();
+                            if(deps.indexOf(dep) === -1) deps.push(dep);
+                        }
+                    });
+                });
+                deps.push(typeName);
+            }else{ //
+                batch[typeName].forEach((ob, index)=>{
+                    Object.keys(ob).forEach((fieldName)=>{
+                        if(typeof ob[fieldName] === 'function'){
+                            let dep = ob[fieldName].pointsTo();
+                            if(deps.indexOf(dep) === -1) deps.splice(typeIndex, 0, dep);
+                        }
+                    });
+                });
+            }
+        });
+        return deps;
+    }
+    return getDependencies(batches);
 };
 
 module.exports = Pop;
