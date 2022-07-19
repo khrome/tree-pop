@@ -81,22 +81,19 @@ describe('tree-pop', ()=>{
                 lookup,
                 otherLinks
             });
-            populate.tree('user', directory.user[0], [
+            const expansion = [
                 'sessionId',
                 '<post',
                 'userAddressLink:user:address'
-            ], (err, user)=>{
+            ];
+            populate.tree('user', directory.user[0], expansion, (err, user)=>{
                 user.addressList.push({ //add a new address
                     street1: '123 Main St.',
                     city: 'Nowhere',
                     state: 'GA',
                     postalcode: '73038'
                 });
-                populate.deconstruct('user', user, [
-                    'sessionId',
-                    '<post',
-                    'userAddressLink:user:address'
-                ], (err, objects)=>{
+                populate.deconstruct('user', user, expansion, (err, objects)=>{
                     
                     //make sure the objects coming out match their counterparts
                     Object.keys(directory).forEach((typeName)=>{

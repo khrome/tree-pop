@@ -56,7 +56,10 @@ Pop.prototype.node = function(type, obs, fuse, cb){
 };
 
 Pop.prototype.doAttachment = function(type, action, context, cb){
-    const internalLink = type+capitalize(this.options.identifier);
+    
+    const internalLink = ( 
+        this.options.join || join
+    )(type, this.options.identifier);
     switch(action.mode.toLowerCase()){
         case 'internal': // N : 1
             this.options.lookup(action.target, [context[action.raw]], (err, results)=>{
@@ -91,7 +94,9 @@ Pop.prototype.doAttachment = function(type, action, context, cb){
             const externalCriteria = {};
             externalCriteria[internalLink] = context[this.options.identifier];
             this.options.lookup(action.target, externalCriteria, (err, results)=>{
-                const listName = action.target+capitalize(this.options.listSuffix);
+                const listName = ( 
+                    this.options.join || join
+                )(action.target, this.options.listSuffix);
                 accessor.set(context, listName, results);
                 cb();
             });
@@ -101,7 +106,9 @@ Pop.prototype.doAttachment = function(type, action, context, cb){
 };
 
 Pop.prototype.detach = function(type, action, context, cb){
-    const internalLink = type+capitalize(this.options.identifier);
+    const internalLink = ( 
+        this.options.join || join
+    )(type, this.options.identifier);
     let value = null;
     let results = {};
     let listName;
@@ -157,7 +164,9 @@ Pop.prototype.detach = function(type, action, context, cb){
         case 'external': // 1 : N
             const externalCriteria = {};
             externalCriteria[internalLink] = context[this.options.identifier];
-            listName = action.target+capitalize(this.options.listSuffix);
+            listName = ( 
+                this.options.join || join
+            )(action.target, this.options.listSuffix);
             value = accessor.get(context, listName);
             accessor.set(context, listName, undefined, true);
             if(!results[action.target]) results[action.target] = [];
