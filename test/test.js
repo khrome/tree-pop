@@ -94,7 +94,6 @@ describe('tree-pop', ()=>{
                     postalcode: '73038'
                 });
                 populate.deconstruct('user', user, expansion, (err, objects)=>{
-                    
                     //make sure the objects coming out match their counterparts
                     Object.keys(directory).forEach((typeName)=>{
                         if(typeName !== 'userAddressLink'){ //don't rewrite existing links

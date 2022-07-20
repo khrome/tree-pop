@@ -74,11 +74,13 @@ Pop.prototype.doAttachment = function(type, action, context, cb){
             const criteria = {};
             criteria[internalLink] = context[this.options.identifier];
             this.options.lookup(action.target, criteria, (err, results)=>{
+                if(err) return cb(err);
                 const externalCriteria = {};
                 const externalLink = ( 
                     this.options.join || join
                 )(action[external], this.options.identifier);
                 externalCriteria[this.options.identifier] = {'$in': results.map((i) =>{
+                    //console.log('I', action, internal, external, type, i, externalLink, internalLink, criteria, (new Error()).stack);
                     return i[externalLink];
                 })};
                 this.options.lookup(action[external], externalCriteria, (err, results)=>{
@@ -124,6 +126,7 @@ Pop.prototype.detach = function(type, action, context, cb){
             if(action[internal] !== type) throw new Error('expected an object to link to: '+type);
             const external = action.from === type?'to':'from';
             const criteria = {};
+            const identifier = this.options.identifier || 'id';
             criteria[internalLink] = context[this.options.identifier];
             listName = ( 
                 this.options.join || join
@@ -154,8 +157,15 @@ Pop.prototype.detach = function(type, action, context, cb){
                     item.id.toJSON = ()=>{ return item.id() };
                     ob[thisLink] = ()=> context.id;
                     ob[thisLink].pointsTo = () => action[internal];
-                    item.id.toJSON = ()=>{ return ob[thisLink]() };
+                    ob[thisLink].toJSON = ()=>{ return ob[thisLink]() };
                     ob[thatLink] = item.id;
+                    let idVal =  null;
+                    ob[identifier] = function(v){
+                        if(v) idVal = v;
+                        return idVal;
+                    };
+                    ob[identifier].pointsTo = () => action.target;
+                    ob[identifier].toJSON = () => idVal;
                     agg.push(ob);
                 }
                 return agg;
@@ -200,19 +210,6 @@ Pop.prototype.parseBatch = function(type, batch){
     }
     return options;
 };
-
-/*Pop.prototype.batches = function(type, ob, batches, cb){
-    //TODO: abstract away the batch syntax
-    arrays.forEachEmission(batches, (batch, index, done)=>{
-        if(!batch) return cb(new Error('empty batch!'));
-        const options = this.parseBatch(type, batch);
-        this.doAttachment(type, options, ob, ()=>{
-            done();
-        });
-    }, ()=>{
-        cb(null, ob);
-    })
-};*/
 
 Pop.prototype.batches = function(type, ob, batches, cb){
     return this.byBatch(type, ob, batches, (options, done)=>{
@@ -295,7 +292,10 @@ Pop.prototype.orderBatches = function(batches){
             if(typeIndex === -1){
                 batch[typeName].forEach((ob, index)=>{
                     Object.keys(ob).forEach((fieldName)=>{
-                        if(typeof ob[fieldName] === 'function'){
+                        if(
+                            typeof ob[fieldName] === 'function' && 
+                            fieldName !== this.options.identifier
+                        ){
                             let dep = ob[fieldName].pointsTo();
                             if(deps.indexOf(dep) === -1) deps.push(dep);
                         }
@@ -305,7 +305,10 @@ Pop.prototype.orderBatches = function(batches){
             }else{ //
                 batch[typeName].forEach((ob, index)=>{
                     Object.keys(ob).forEach((fieldName)=>{
-                        if(typeof ob[fieldName] === 'function'){
+                        if(
+                            typeof ob[fieldName] === 'function' && 
+                            fieldName !== this.options.identifier
+                        ){
                             let dep = ob[fieldName].pointsTo();
                             if(deps.indexOf(dep) === -1) deps.splice(typeIndex, 0, dep);
                         }
