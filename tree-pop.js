@@ -63,7 +63,7 @@ Pop.prototype.doAttachment = function(type, action, context, cb){
     switch(action.mode.toLowerCase()){
         case 'internal': // N : 1
             this.options.lookup(action.target, [context[action.raw]], (err, results)=>{
-                if(results[0]) accessor.set(context, action.target, results[0]);
+                if(results[0]) accessor.set(context, action.output, results[0]);
                 cb();
             });
             break;
@@ -116,8 +116,8 @@ Pop.prototype.detach = function(type, action, context, cb){
     let listName;
     switch(action.mode.toLowerCase()){
         case 'internal': // N : 1
-            value = accessor.get(context, action.target);
-            accessor.set(context, action.target, undefined, true);
+            value = accessor.get(context, action.output);
+            accessor.set(context, action.output, undefined, true);
             if(!results[action.target]) results[action.target] = [];
             results[action.target] = results[action.target].concat([value]);
             break;
@@ -188,6 +188,7 @@ Pop.prototype.detach = function(type, action, context, cb){
 };
 
 Pop.prototype.parseBatch = function(type, batch){
+    let ex;
     const options = {
         raw: batch,
         mode: batch.indexOf('<') === 0?
@@ -198,9 +199,14 @@ Pop.prototype.parseBatch = function(type, batch){
             batch.substring(1):
             batch.indexOf(':') !== -1?
                 batch.split(':').shift():
-                (batch && this.options.expandable(type, batch, 0).type)
+                (batch && (ex = this.options.expandable(type, batch, 0)).type)
                 // batch.substring(0, batch.length-identifier.length),
     };
+    if(ex && ex.prefix){
+        options.output = this.options.join(ex.prefix, options.target);
+    }else{
+        options.output = options.target
+    }
     if(batch.indexOf(':') !== -1){
         const parts = batch.split(':');
         if(parts[1]){
