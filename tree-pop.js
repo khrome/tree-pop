@@ -73,16 +73,37 @@ Pop.prototype.doAttachment = function(type, action, context, cb){
             const external = action.from === type?'to':'from';
             const criteria = {};
             criteria[internalLink] = context[this.options.identifier];
+            
+            /*if(context[this.options.identifier]['$in'] && context[this.options.identifier]['$in'].length === 1){
+                criteria[internalLink] = context[this.options.identifier]['$in'][0];
+            }*/
             this.options.lookup(action.target, criteria, (err, results)=>{
                 if(err) return cb(err);
                 const externalCriteria = {};
+                const internalCriteria = {};
+                //*
                 const externalLink = ( 
                     this.options.join || join
                 )(action[external], this.options.identifier);
-                externalCriteria[this.options.identifier] = {'$in': results.map((i) =>{
-                    //console.log('I', action, internal, external, type, i, externalLink, internalLink, criteria, (new Error()).stack);
-                    return i[externalLink];
-                })};
+                const isExternal = (criteria[externalLink] === null) ? true: false;
+                const internalLink = ( 
+                    this.options.join || join
+                )(action[internal], this.options.identifier);
+                try{
+                    externalCriteria[this.options.identifier] = {'$in': results.map((i) =>{
+                        let res = criteria[externalLink] || i[externalLink];
+                        if(!res) throw Error('No external link')
+                        return res;
+                    })};
+                }catch(ex){
+                    if(ex.message === 'No external link'){
+                        externalCriteria[this.options.identifier] = {'$in': results.map((i) =>{
+                            let res = criteria[internalLink] || i[internalLink];
+                            if(!res) throw Error('No internal link')
+                            return res;
+                        })};
+                    }else throw ex;
+                }
                 this.options.lookup(action[external], externalCriteria, (err, results)=>{
                     const listName = ( 
                         this.options.join || join
