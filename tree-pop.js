@@ -235,6 +235,14 @@ Pop.prototype.parseBatch = function(type, batch){
             if(parts[2]) options.to = parts[2];
         }
     }
+    if(!options.target){
+        let parts = this.options.expandable(type, batch);
+        options.target = parts.to;
+        let bits = [];
+        if(parts.prefix) bits.push(parts.prefix);
+        bits.push(parts.to);
+        options.output = this.options.join.apply(null, bits);
+    }
     return options;
 };
 
