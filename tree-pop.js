@@ -315,6 +315,11 @@ Pop.prototype.deconstruct = function(type, o, att, cb){
             cb(err, finres);
         });
     }
+    if(attachments && !attachments.length){
+        let res = {};
+        res[type] = [ob];
+        return callback(null, res)
+    }
     return callback(new Error('No supported mode.'))
 };
 
