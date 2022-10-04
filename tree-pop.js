@@ -21,7 +21,7 @@ const Pop = function(opts){
     this.options = opts || {};
 }
 
-Pop.prototype.node = function(type, obs, fuse, cb){
+Pop.prototype.node = function(type, obs, fuse, res, cb){
     const fields = Object.keys(obs[0]);
     arrays.forEachEmission(obs, (ob, obi, complete)=>{
         const finalActionsAndFinish = ()=>{
@@ -32,7 +32,7 @@ Pop.prototype.node = function(type, obs, fuse, cb){
             const linkField = field.substring(0, field.length - this.options.identifier.length);
             const isExpandable = this.options.expandable(type, field, ob[field]);
             if(!isExpandable) return done();
-            this.options.lookup(isExpandable.type, [ob[field]], (err, results)=>{
+            this.options.lookup(isExpandable.type, [ob[field]], res, (err, results)=>{
                 let result = results[0];
                 if(!result) throw new Error(`Could not find ${isExpandable.type} : ${ob[field]}`);
                 if(ob[linkField]) throw new Error(`linked field(${linkField}) already exists.`);
@@ -55,14 +55,14 @@ Pop.prototype.node = function(type, obs, fuse, cb){
     })
 };
 
-Pop.prototype.doAttachment = function(type, action, context, cb){
+Pop.prototype.doAttachment = function(type, action, context, res, cb){
     
     const internalLink = ( 
         this.options.join || join
     )(type, this.options.identifier);
     switch(action.mode.toLowerCase()){
         case 'internal': // N : 1
-            this.options.lookup(action.target, [context[action.raw]], (err, results)=>{
+            this.options.lookup(action.target, [context[action.raw]], res, (err, results)=>{
                 if(results[0]) accessor.set(context, action.output, results[0]);
                 cb();
             });
@@ -77,7 +77,7 @@ Pop.prototype.doAttachment = function(type, action, context, cb){
             /*if(context[this.options.identifier]['$in'] && context[this.options.identifier]['$in'].length === 1){
                 criteria[internalLink] = context[this.options.identifier]['$in'][0];
             }*/
-            this.options.lookup(action.target, criteria, (err, results)=>{
+            this.options.lookup(action.target, criteria, res, (err, results)=>{
                 if(err) return cb(err);
                 const externalCriteria = {};
                 const internalCriteria = {};
@@ -104,7 +104,7 @@ Pop.prototype.doAttachment = function(type, action, context, cb){
                         })};
                     }else throw ex;
                 }
-                this.options.lookup(action[external], externalCriteria, (err, results)=>{
+                this.options.lookup(action[external], externalCriteria, res, (err, results)=>{
                     const listName = ( 
                         this.options.join || join
                     )(action[external], this.options.listSuffix);
@@ -116,7 +116,7 @@ Pop.prototype.doAttachment = function(type, action, context, cb){
         case 'external': // 1 : N
             const externalCriteria = {};
             externalCriteria[internalLink] = context[this.options.identifier];
-            this.options.lookup(action.target, externalCriteria, (err, results)=>{
+            this.options.lookup(action.target, externalCriteria, res, (err, results)=>{
                 const listName = ( 
                     this.options.join || join
                 )(action.target, this.options.listSuffix);
@@ -246,9 +246,9 @@ Pop.prototype.parseBatch = function(type, batch){
     return options;
 };
 
-Pop.prototype.batches = function(type, ob, batches, cb){
+Pop.prototype.batches = function(type, ob, batches, res, cb){
     return this.byBatch(type, ob, batches, (options, done)=>{
-        this.doAttachment(type, options, ob, ()=>{
+        this.doAttachment(type, options, ob, res, ()=>{
             done();
         });
     }, cb);
@@ -268,28 +268,28 @@ Pop.prototype.byBatch = function(type, ob, batches, action, cb){
     })
 };
 
-Pop.prototype.tree = function(type, o, att, cb){
+Pop.prototype.tree = function(type, o, att, res, cb){
     const ob = JSON.parse(JSON.stringify(o));
     const callback = typeof att === 'function' && !cb?att:cb;
     const attachments = typeof att === 'function' && !cb?[]:att;
     if(this.options.recursive && ((!attachments) || (!attachments.length))){
-        return this.node(type, [ob], this.options.recursive, (err, obs)=>{
+        return this.node(type, [ob], this.options.recursive, res, (err, obs)=>{
             callback(err, obs?obs[0]:null);
         });
     }
     if(attachments.length){
         //do batched
-        return this.batches(type, ob, attachments, callback);
+        return this.batches(type, ob, attachments, res, callback);
     }
     return callback(new Error('No supported mode.'))
 };
 
-Pop.prototype.deconstruct = function(type, o, att, cb){
+Pop.prototype.deconstruct = function(type, o, att, res, cb){
     const ob = JSON.parse(JSON.stringify(o));
     const callback = typeof att === 'function' && !cb?att:cb;
     const attachments = typeof att === 'function' && !cb?[]:att;
     if(this.options.recursive && ((!attachments) || (!attachments.length))){
-        return this.node(type, [ob], this.options.recursive, (err, obs)=>{
+        return this.node(type, [ob], this.options.recursive, res, (err, obs)=>{
             callback(err, obs?obs[0]:null);
         });
     }

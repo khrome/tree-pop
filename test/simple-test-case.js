@@ -28,8 +28,9 @@ const expandable = (type, fieldName, fieldValue) => {
     return false;
 };
 
-const lookup = (type, context, cb) => {
+const lookup = (type, context, req, cb) => {
     if(!directory[type]) return cb(new Error('Type not Found!'));
+    if(!cb) console.log('NO CB', (new Error()).stack)
     if(Array.isArray(context)){
         const idList = context;
         const results = directory[type].filter((item)=>{

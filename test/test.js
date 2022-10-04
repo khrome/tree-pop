@@ -38,7 +38,7 @@ describe('tree-pop', ()=>{
                 'sessionId',
                 '<post',
                 'userAddressLink:user:address'
-            ], (err, user)=>{
+            ], {}, (err, user)=>{
                 should.not.exist(err);
                 should.exist(user);
                 should.exist(user.id);
@@ -86,14 +86,14 @@ describe('tree-pop', ()=>{
                 '<post',
                 'userAddressLink:user:address'
             ];
-            populate.tree('user', directory.user[0], expansion, (err, user)=>{
+            populate.tree('user', directory.user[0], expansion, {}, (err, user)=>{
                 user.addressList.push({ //add a new address
                     street1: '123 Main St.',
                     city: 'Nowhere',
                     state: 'GA',
                     postalcode: '73038'
                 });
-                populate.deconstruct('user', user, expansion, (err, objects)=>{
+                populate.deconstruct('user', user, expansion, {}, (err, objects)=>{
                     //make sure the objects coming out match their counterparts
                     Object.keys(directory).forEach((typeName)=>{
                         if(typeName !== 'userAddressLink'){ //don't rewrite existing links
