@@ -223,11 +223,13 @@ Pop.prototype.parseBatch = function(type, batch){
                 (batch && (ex = this.options.expandable(type, batch, 0)).type)
                 // batch.substring(0, batch.length-identifier.length),
     };
+    if(!ex) ex = this.options.expandable(type, options.target, 0);
     if(ex && ex.prefix){
-        options.output = this.options.join(ex.prefix, options.target);
+        options.output = this.options.join(ex.prefix, ex.type);
     }else{
         options.output = options.target
     }
+    options.type = ex.type;
     if(batch.indexOf(':') !== -1){
         const parts = batch.split(':');
         if(parts[1]){
@@ -266,6 +268,113 @@ Pop.prototype.byBatch = function(type, ob, batches, action, cb){
     }, ()=>{
         cb(null, ob);
     })
+};
+
+Pop.prototype.mutateForest = function(type, list, att, req, cb){
+    const callback = typeof att === 'function' && !cb?att:cb;
+    const attachments = typeof att === 'function' && !cb?[]:att;
+    
+    if(attachments.length){
+        let identifier = this.options.linkSuffix || 'id';
+        arrays.forEachEmission(attachments, (attachment, index, done)=>{
+            let batch = this.parseBatch(type, attachment);
+            if(batch.target){
+                if(batch.to && batch.from){
+                    let targetIdField = this.options.join(
+                        batch.target, 
+                        identifier
+                    );
+                    let fromIdField = this.options.join(
+                        batch.from, 
+                        identifier
+                    );
+                    let toIdField = this.options.join(
+                        batch.to, 
+                        identifier
+                    );
+                    let targetLocation = batch.output; //add potentially parsed alt
+                    let targetValues = accessor.getAll(list, `*.${identifier}`).map(i=>i.value);
+                    //let targetValues = this.harvestValues(list, targetIdField);
+                    let targetContext = {};
+                    // 1. select the right ids from the linking table
+                    targetContext[fromIdField] = {$in: targetValues};
+                    this.options.lookup(batch.target, targetContext, req, (err, targets)=>{
+                        if(err) return callback(err);
+                        let toValues = accessor.getAll(targets, `*.${toIdField}`).map(i=>i.value);
+                        //let toValues = this.harvestValues(targets, toIdField);
+                        let toContext = {};
+                        toContext[identifier] = {$in: toValues};
+                        // 2. select the linked ids
+                        this.options.lookup(batch.to, toContext, req, (err, results)=>{
+                            if(err) return callback(err);
+                            list.forEach((item)=>{
+                                // 3. consolidate this item's values
+                                let thisItemsTargets = targets.filter((target)=>{
+                                    return target[fromIdField] === item[identifier];
+                                });
+                                let thisItemsResults = thisItemsTargets.map((target)=>{
+                                    return results.find((result)=>{
+                                        return result[identifier] === target[toIdField];
+                                    });
+                                });
+                                // 4. set the relevant values for this item
+                                accessor.set(item, targetLocation, thisItemsResults);
+                                
+                            });
+                            done();
+                        });
+                    });
+                    
+                }else{
+                    let targetIdField = this.options.join(
+                        batch.target, 
+                        identifier
+                    );
+                    if(batch.mode === 'internal'){
+                        try{
+                            let targetValues = (
+                                accessor.getAll(list, `*.${batch.raw}`) ||
+                                []
+                            ).map(i=>i.value);
+                            let targetContext = {};
+                            targetContext[targetIdField] = {$in: targetValues}
+                            this.options.lookup(batch.type, targetContext, req, (err, targets)=>{
+                                list.forEach((item)=>{
+                                    let thisItemsTargets = targets.filter((target)=>{
+                                        return target[fromIdField] === item[identifier];
+                                    });
+                                    accessor.set(item, batch.output, thisItemsTargets[0]);
+                                });
+                            });
+                        }catch(ex){}
+                        done();
+                    }else{
+                        if(batch.mode === 'external'){
+                            let targetValues = accessor.getAll(list, `*.${identifier}`).map(i=>i.value);
+                            let targetContext = {};
+                            targetContext[batch.target] = {$in: targetValues}
+                            this.options.lookup(batch.type, targetContext, req, (err, targets)=>{
+                                list.forEach((item)=>{
+                                    let thisItemsTargets = targets.filter((target)=>{
+                                        return target[batch.target] === item[identifier];
+                                    });
+                                    accessor.set(item, batch.output, thisItemsTargets[0]);
+                                });
+                            });
+                            done();
+                        }else{
+                            throw new Error('Unknown Batch')
+                        }
+                    }
+                }
+            }
+            //done();
+        }, ()=>{
+            callback(null, list);
+        });
+        return;
+    }
+    return callback(new Error('No supported mode.'))
 };
 
 Pop.prototype.tree = function(type, o, att, res, cb){
