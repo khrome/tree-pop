@@ -275,7 +275,8 @@ Pop.prototype.mutateForest = function(type, list, att, req, cb){
     const attachments = typeof att === 'function' && !cb?[]:att;
     
     if(attachments.length){
-        let identifier = this.options.linkSuffix || 'id';
+        let identifier = this.options.linkSuffix || this.options.identifier || 'id';
+        let listSuffix = this.options.listSuffix || 'list';
         arrays.forEachEmission(attachments, (attachment, index, done)=>{
             let batch = this.parseBatch(type, attachment);
             if(batch.target){
@@ -321,7 +322,7 @@ Pop.prototype.mutateForest = function(type, list, att, req, cb){
                                 accessor.set(item, targetLocation, thisItemsResults);
                                 
                             });
-                            done();
+                            return done();
                         });
                     });
                     
@@ -345,23 +346,27 @@ Pop.prototype.mutateForest = function(type, list, att, req, cb){
                                     });
                                     accessor.set(item, batch.output, thisItemsTargets[0]);
                                 });
+                                return done();
                             });
-                        }catch(ex){}
-                        done();
+                        }catch(ex){
+                            return done();
+                        }
                     }else{
                         if(batch.mode === 'external'){
                             let targetValues = accessor.getAll(list, `*.${identifier}`).map(i=>i.value);
                             let targetContext = {};
-                            targetContext[batch.target] = {$in: targetValues}
-                            this.options.lookup(batch.type, targetContext, req, (err, targets)=>{
+                            let externalId = this.options.join(type, identifier);
+                            let returnTarget = this.options.join(batch.output, this.options.listSuffix);
+                            targetContext[externalId] = {$in: targetValues};
+                            this.options.lookup(batch.target, targetContext, req, (err, targets)=>{
                                 list.forEach((item)=>{
                                     let thisItemsTargets = targets.filter((target)=>{
-                                        return target[batch.target] === item[identifier];
+                                        return target[externalId] === item[identifier];
                                     });
-                                    accessor.set(item, batch.output, thisItemsTargets[0]);
+                                    accessor.set(item, returnTarget, thisItemsTargets);
                                 });
+                                return done();
                             });
-                            done();
                         }else{
                             throw new Error('Unknown Batch')
                         }
