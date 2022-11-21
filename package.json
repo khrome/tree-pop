@@ -1,6 +1,6 @@
 {
   "name": "tree-pop",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "main": "tree-pop.js",
   "devDependencies": {
     "chai": "^4.3.6",

@@ -338,11 +338,11 @@ Pop.prototype.mutateForest = function(type, list, att, req, cb){
                                 []
                             ).map(i=>i.value);
                             let targetContext = {};
-                            targetContext[targetIdField] = {$in: targetValues}
-                            this.options.lookup(batch.type, targetContext, req, (err, targets)=>{
+                            targetContext[identifier] = {$in: targetValues}
+                            this.options.lookup(batch.target, targetContext, req, (err, targets)=>{
                                 list.forEach((item)=>{
                                     let thisItemsTargets = targets.filter((target)=>{
-                                        return target[fromIdField] === item[identifier];
+                                        return target[identifier] === item[batch.raw];
                                     });
                                     accessor.set(item, batch.output, thisItemsTargets[0]);
                                 });
